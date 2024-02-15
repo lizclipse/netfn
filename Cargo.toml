@@ -1,3 +1,7 @@
+[workspace]
+members = ["netfn_gen", "netfn_macro"]
+resolver = "2"
+
 [package]
 name = "netfn"
 version = "0.1.0"
@@ -6,3 +10,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-trait = "0.1.75"
+netfn_gen = { version = "0.1.0", path = "netfn_gen" }
+netfn_macro = { version = "0.1.0", path = "netfn_macro" }
+serde = { version = "1.0.193", features = ["derive"] }
+
+[dev-dependencies]
+async-trait = "0.1.75"
+axum = "0.7.2"
+serde = { version = "1.0.193", features = ["derive"] }
+tokio = { version = "1.35.1", features = ["full"] }
+typeshare = "1.0.1"
+ulid = "1.1.0"

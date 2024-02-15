@@ -1,14 +1,24 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+use std::future::Future;
+
+pub use netfn_gen::*;
+pub use netfn_macro::*;
+
+pub struct Header {
+    pub api: &'static str,
+    pub method: &'static str,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub enum BackendError<T> {
+    ConnectionFailed,
+    Res(T),
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+pub trait ClientBackend {
+    type Encoding;
+
+    fn send(
+        &mut self,
+        header: Header,
+        params: Self::Encoding,
+    ) -> impl Future<Output = Result<Self::Encoding, BackendError<Self::Encoding>>> + Send;
 }
