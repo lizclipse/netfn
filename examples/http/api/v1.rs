@@ -5,8 +5,9 @@ use ulid::Ulid;
 use crate::{AppState, Item};
 
 #[netfn::service]
-pub trait Test {
-    async fn a(&self, input: String) -> Item;
+pub trait TestApi {
+    async fn foo(&self, input: String) -> Item;
+    async fn bar(&self, item: Item, input: String);
     // fn b(&self, input: String) -> impl Future<Output = Item> + Send;
 }
 

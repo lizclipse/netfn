@@ -11,6 +11,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1.75"
+futures-channel = "0.3.30"
 netfn_gen = { version = "0.1.0", path = "netfn_gen" }
 netfn_macro = { version = "0.1.0", path = "netfn_macro" }
 serde = { version = "1.0.193", features = ["derive"] }
