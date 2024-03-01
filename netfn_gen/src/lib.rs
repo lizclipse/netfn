@@ -11,7 +11,7 @@ pub fn service_generate(_args: TokenStream, input: TokenStream) -> Result<TokenS
     let idents = Idents::new(&item_trait);
     let fns = rewrite_trait(&mut item_trait)?;
     inject_exts(&mut item_trait, &fns, &idents);
-    let fn_inputs = fn_inputs(&fns);
+    let fn_inputs = fn_inputs(&item_trait, &fns);
     let req_enum = request_enum(&mut item_trait, &fns, &idents);
     let res_enum = response_enum(&mut item_trait, &fns, &idents);
 
@@ -97,11 +97,34 @@ fn inject_exts(item_trait: &mut ItemTrait, fns: &Vec<ServiceFn>, idents: &Idents
 
         let args = tfn_args(&tfn.tfn).map(|(i, _inp)| quote!(req.#i));
 
-        quote! {
-            #priv_mod::#req_name::#variant(req, res) => {
-                #priv_mod::#res_name::#variant(self.#fn_name(
-                    #( #args ),*
-                ).await)
+        let call = quote! {
+            self.#fn_name(
+                #( #args ),*
+            ).await
+        };
+
+        let ret = if tfn.has_output {
+            quote! {
+                self::#priv_mod::#res_name::#variant(#call)
+            }
+        } else {
+            quote! {
+                #call;
+                self::#priv_mod::#res_name::#variant
+            }
+        };
+
+        if tfn.has_input {
+            quote! {
+                self::#priv_mod::#req_name::#variant(req) => {
+                    #ret
+                }
+            }
+        } else {
+            quote! {
+                self::#priv_mod::#req_name::#variant => {
+                    #ret
+                }
             }
         }
     });
@@ -113,7 +136,7 @@ fn inject_exts(item_trait: &mut ItemTrait, fns: &Vec<ServiceFn>, idents: &Idents
         },
         parse_quote! {
             #[allow(dead_code)]
-            fn __dispatch(&self, request: #priv_mod::#req_name) -> impl ::core::future::Future<Output = #priv_mod::#res_name> + Send {
+            fn __dispatch(&self, request: self::#priv_mod::#req_name) -> impl ::core::future::Future<Output = self::#priv_mod::#res_name> + Send {
                 async {
                     match request {
                         #( #branches ),*
@@ -124,17 +147,22 @@ fn inject_exts(item_trait: &mut ItemTrait, fns: &Vec<ServiceFn>, idents: &Idents
     ]);
 }
 
-fn fn_inputs(fns: &Vec<ServiceFn>) -> TokenStream {
-    let inputs = fns.iter().map(|tfn| {
+fn fn_inputs(item_trait: &ItemTrait, fns: &Vec<ServiceFn>) -> TokenStream {
+    let vis = &item_trait.vis;
+    let inputs = fns.iter().filter_map(|tfn| {
         let name = &tfn.args;
-        let args = tfn_args(&tfn.tfn).map(|(i, inp)| {
-            let ty = &inp.ty;
-            Some(quote!(pub(crate) #i: #ty))
-        });
-        quote! {
-            pub struct #name {
-                #( #args ),*
-            }
+        if tfn.has_input {
+            let args = tfn_args(&tfn.tfn).map(|(i, inp)| {
+                let ty = &inp.ty;
+                Some(quote!(#vis #i: #ty))
+            });
+            Some(quote! {
+                pub struct #name {
+                    #( #args ),*
+                }
+            })
+        } else {
+            None
         }
     });
 
@@ -146,9 +174,15 @@ fn fn_inputs(fns: &Vec<ServiceFn>) -> TokenStream {
 fn request_enum(item_trait: &mut ItemTrait, fns: &Vec<ServiceFn>, idents: &Idents) -> TokenStream {
     let variants = fns.iter().map(|tfn| {
         let ident = &tfn.variant;
-        let args = &tfn.args;
-        quote! {
-            #ident(#args)
+        if tfn.has_input {
+            let args = &tfn.args;
+            quote! {
+                #ident(#args)
+            }
+        } else {
+            quote! {
+                #ident
+            }
         }
     });
 
@@ -164,9 +198,13 @@ fn request_enum(item_trait: &mut ItemTrait, fns: &Vec<ServiceFn>, idents: &Ident
 fn response_enum(item_trait: &mut ItemTrait, fns: &Vec<ServiceFn>, idents: &Idents) -> TokenStream {
     let variants = fns.iter().map(|tfn| {
         let ident = &tfn.variant;
-        let ret = tfn_ret(&tfn.tfn);
-        quote! {
-            #ident(#ret)
+        if tfn.has_output {
+            let ret = tfn_ret(&tfn.tfn);
+            quote! {
+                #ident(#ret)
+            }
+        } else {
+            quote!(#ident)
         }
     });
 
@@ -183,6 +221,8 @@ struct ServiceFn {
     tfn: TraitItemFn,
     variant: Ident,
     args: Ident,
+    has_input: bool,
+    has_output: bool,
 }
 
 impl ServiceFn {
@@ -192,6 +232,14 @@ impl ServiceFn {
             tfn: tfn.clone(),
             args: format_ident!("{}{}Args", item_trait, variant),
             variant,
+            has_input: tfn_args(&tfn).next().is_some(),
+            has_output: match &tfn.sig.output {
+                ReturnType::Default => false,
+                ReturnType::Type(_, tuple) if matches!(&**tuple, syn::Type::Tuple(tuple) if tuple.elems.is_empty()) => {
+                    false
+                }
+                _ => true,
+            },
         }
     }
 }

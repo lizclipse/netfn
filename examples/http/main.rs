@@ -4,7 +4,6 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 mod api;
 
@@ -53,7 +52,6 @@ impl AppState {
     }
 }
 
-#[typeshare]
 #[derive(Serialize, Deserialize)]
 pub struct TestStruct {
     #[serde(rename = "0")]

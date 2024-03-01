@@ -1,14 +1,12 @@
-use std::future::Future;
-
-use ulid::Ulid;
-
-use crate::{AppState, Item};
+use std::collections::HashMap;
 
 #[netfn::service]
 pub trait TestApi {
-    async fn go_fuck_yourself(&self);
-    async fn fuck_me(&self, msg: String) -> bool;
-    // fn b(&self, input: String) -> impl Future<Output = Item> + Send;
+    async fn foo(&self);
+    async fn bar(&self, inp: bool) -> ();
+    async fn baz(&self) -> u32;
+    async fn qaz(&self, inp: String) -> Vec<String>;
+    async fn qoz(&self, inp: HashMap<String, String>, val: i16) -> Result<bool, String>;
 }
 
 /*
@@ -66,8 +64,8 @@ impl ItemApi for ItemService {
         self.state.delete(id)
     }
 }
+*/
 
 pub fn mod_path() -> &'static str {
     module_path!()
 }
-*/
