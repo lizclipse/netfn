@@ -6,11 +6,12 @@ use crate::{AppState, Item};
 
 #[netfn::service]
 pub trait TestApi {
-    async fn foo(&self, input: String) -> Item;
-    async fn bar(&self, item: Item, input: String);
+    async fn go_fuck_yourself(&self);
+    async fn fuck_me(&self, msg: String) -> bool;
     // fn b(&self, input: String) -> impl Future<Output = Item> + Send;
 }
 
+/*
 pub trait ItemApi {
     // Auto-generated methods
 
@@ -69,3 +70,4 @@ impl ItemApi for ItemService {
 pub fn mod_path() -> &'static str {
     module_path!()
 }
+*/

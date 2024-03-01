@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 netfn_gen = { version = "0.1.0", path = "../netfn_gen" }
-syn = { version = "2.0.48", default-features = false }
+syn = { version = "2.0.49", default-features = false }
 
 [lib]
 proc-macro = true
