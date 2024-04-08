@@ -1,7 +1,7 @@
 #![warn(clippy::pedantic)]
 
 use futures_channel::{mpsc, oneshot};
-use futures_util::{lock::Mutex, sink::SinkExt as _, StreamExt};
+use futures_util::{lock::Mutex, sink::SinkExt as _, StreamExt as _};
 use netfn_core::{Service, Transport};
 use thiserror::Error;
 

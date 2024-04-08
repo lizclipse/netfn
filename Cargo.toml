@@ -1,5 +1,5 @@
 [workspace]
-members = [ "netfn_core","netfn_gen", "netfn_macro", "netfn_transport_channel"]
+members = ["netfn_core", "netfn_gen", "netfn_macro", "netfn_transport_channel"]
 
 [package]
 name = "netfn"
