@@ -1,6 +1,6 @@
 #![warn(clippy::pedantic)]
 
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 pub trait Service {
     const NAME: &'static str;
@@ -13,5 +13,24 @@ pub trait Service {
 pub trait Transport<Req, Res> {
     type Error;
 
-    fn dispatch(&self, request: Req) -> impl Future<Output = Result<Res, Self::Error>> + Send;
+    fn dispatch(
+        &self,
+        name: &str,
+        request: Req,
+    ) -> impl Future<Output = Result<Res, Self::Error>> + Send;
+}
+
+impl<T, Req, Res, E> Transport<Req, Res> for Arc<T>
+where
+    T: Transport<Req, Res, Error = E>,
+{
+    type Error = E;
+
+    fn dispatch(
+        &self,
+        name: &str,
+        request: Req,
+    ) -> impl Future<Output = Result<Res, Self::Error>> + Send {
+        (&**self).dispatch(name, request)
+    }
 }

@@ -5,6 +5,7 @@ use futures_util::{lock::Mutex, sink::SinkExt as _, StreamExt as _};
 use netfn_core::{Service, Transport};
 use thiserror::Error;
 
+#[derive(Debug)]
 pub struct ChannelTransport<Req, Res> {
     tx: Mutex<mpsc::Sender<(Req, oneshot::Sender<Res>)>>,
 }
@@ -14,6 +15,7 @@ where
     Req: Send,
     Res: Send,
 {
+    #[must_use]
     pub fn new<S>(service: S, buffer_size: usize) -> (Self, ChannelListener<S, Req, Res>)
     where
         S: Service<Request = Req, Response = Res>,
@@ -47,9 +49,9 @@ where
     Req: Send,
     Res: Send,
 {
-    type Error = Error;
+    type Error = TransportError;
 
-    async fn dispatch(&self, request: Req) -> Result<Res, Self::Error> {
+    async fn dispatch(&self, _name: &str, request: Req) -> Result<Res, Self::Error> {
         let (otx, orx) = oneshot::channel();
         self.tx.lock().await.send((request, otx)).await?;
         Ok(orx.await?)
@@ -57,7 +59,7 @@ where
 }
 
 #[derive(Error, Debug)]
-pub enum Error {
+pub enum TransportError {
     #[error("failed to send request")]
     Send(#[from] mpsc::SendError),
     #[error("failed to receive response")]

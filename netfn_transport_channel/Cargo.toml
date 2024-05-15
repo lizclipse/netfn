@@ -10,4 +10,3 @@ futures-channel = { version = "0.3.30", features = ["sink"] }
 futures-util = { version = "0.3.30", default-features = false, features = ["sink", "std"] }
 netfn_core = { version = "0.1.0", path = "../netfn_core" }
 thiserror = "1.0.58"
-tokio = { version = "1.37.0", features = ["sync"] }
