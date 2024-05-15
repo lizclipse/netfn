@@ -11,3 +11,6 @@ syn = { version = "2.0.55", default-features = false }
 
 [lib]
 proc-macro = true
+
+[features]
+serde = ["netfn_gen/serde"]

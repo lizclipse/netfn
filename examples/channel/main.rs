@@ -6,7 +6,7 @@ use netfn_transport_channel::ChannelTransport;
 
 #[tokio::main]
 pub async fn main() {
-    let service = TestApi;
+    let service = TestService;
 
     let (transport, listener) = ChannelTransport::new(service, 128);
 
@@ -44,18 +44,32 @@ pub async fn main() {
     println!("<<<<\n");
 }
 
-struct TestApi;
-
 #[netfn::service]
-impl TestApi {
+trait TestApi {
     /// Foo documentation
     ///
     /// More docs
+    async fn foo(&self);
+
+    /// Bar docs
+    #[allow(clippy::unused_unit)]
+    async fn bar(&self, inp: bool) -> ();
+
+    async fn baz(&self) -> u32;
+
+    async fn qaz(&self, inp: String) -> Vec<String>;
+
+    async fn qoz(&self, inp: HashMap<String, String>, val: i16) -> Result<bool, String>;
+}
+
+struct TestService;
+
+impl_service_for_test_api!(TestService, self);
+impl TestApi for TestService {
     async fn foo(&self) {
         println!("[foo]");
     }
 
-    /// Bar docs
     #[allow(clippy::unused_unit)]
     async fn bar(&self, inp: bool) -> () {
         println!("[bar] inp: {inp}");

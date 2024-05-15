@@ -10,4 +10,8 @@ case = "1.0.0"
 darling = "0.20.8"
 proc-macro2 = "1.0.79"
 quote = "1.0.35"
+serde_derive = { version = "1.0.197", optional = true }
 syn = { version = "2.0.55", default-features = false, features = ["full", "parsing", "printing", "extra-traits", "visit-mut", "clone-impls"] }
+
+[features]
+serde = ["dep:serde_derive"]
