@@ -1,0 +1,10 @@
+[package]
+name = "example-channel"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+netfn = { path = "../.." }
+netfn_transport_channel = { path = "../../netfn_transport_channel" }
+tokio = { version = "1.37.0", features = ["full"] }

@@ -10,6 +10,9 @@ use syn::{
     Meta, PatType, Result, ReturnType, TraitItemFn, Visibility,
 };
 
+#[cfg(feature = "serde")]
+pub use serde;
+
 #[derive(Debug, FromMeta)]
 struct Args {
     vis: Option<Visibility>,
@@ -361,7 +364,10 @@ fn tfn_docs(tfn: &TraitItemFn) -> impl Iterator<Item = &Attribute> {
 
 #[cfg(feature = "serde")]
 fn struct_derives() -> TokenStream {
-    quote!(#[derive(::serde_derive::derive_serialize, ::serde_derive::Deserialize, Clone, Debug)])
+    quote! {
+        #[derive(::netfn::serde::Serialize, ::netfn::serde::Deserialize, Clone, Debug)]
+        #[serde(crate = "::netfn::serde")]
+    }
 }
 
 #[cfg(not(feature = "serde"))]

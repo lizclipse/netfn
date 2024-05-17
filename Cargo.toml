@@ -1,5 +1,12 @@
 [workspace]
-members = ["netfn_core", "netfn_gen", "netfn_macro", "netfn_transport_channel"]
+members = [
+  "netfn_*",
+  "examples/*",
+]
+
+default-members = [
+  "netfn_*",
+]
 
 [package]
 name = "netfn"
@@ -9,12 +16,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-trait = "0.1.79"
 netfn_core = { version = "0.1.0", path = "netfn_core" }
-netfn_gen = { version = "0.1.0", path = "netfn_gen" }
 netfn_macro = { version = "0.1.0", path = "netfn_macro" }
-serde = { version = "1.0.197", features = ["derive"] }
+serde = { version = "1.0.197", features = ["derive"], optional = true }
 
-[dev-dependencies]
-netfn_transport_channel = { path = "netfn_transport_channel" }
-tokio = { version = "1.37.0", features = ["full"] }
+[features]
+serde = ["netfn_macro/serde", "dep:serde"]
