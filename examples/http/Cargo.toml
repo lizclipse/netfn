@@ -1,0 +1,12 @@
+[package]
+name = "example_http"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+axum = "0.7.5"
+netfn = { path = "../..", features = ["serde"] }
+netfn_transport_http = { path = "../../netfn_transport_http" }
+serde_json = "1.0.117"
+tokio = { version = "1.37.0", features = ["full"] }

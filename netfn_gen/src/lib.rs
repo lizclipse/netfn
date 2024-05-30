@@ -266,17 +266,7 @@ impl<'a> Generator<'a> {
                 let name = &inp.pat;
                 quote!(#i: #name)
             });
-            let input = quote!{
-                #req_enum::#variant(#args_struct {
-                    #(#variant_args),*
-                })
-            };
-
             let output = tfn_ret(&tfn.tfn);
-            let output = quote!{
-                impl ::core::future::Future<Output = ::core::result::Result<#output, T::Error>> + ::core::marker::Send
-            };
-            let output_arm = quote!(#res_enum::#variant(result) => Ok(result));
 
             let docs = tfn_docs(&tfn.tfn);
 
@@ -285,11 +275,20 @@ impl<'a> Generator<'a> {
                 pub fn #name<'a>(
                     &'a self,
                     #(#args),*
-                ) -> #output + 'a {
-                    let result = self.transport.dispatch(Self::NAME, #input);
+                ) -> impl
+                    ::core::future::Future<Output = ::core::result::Result<#output, T::Error>>
+                  + ::core::marker::Send
+                  + 'a
+                {
+                    let result = self.transport.dispatch(
+                        Self::NAME,
+                        #req_enum::#variant(#args_struct {
+                            #(#variant_args),*
+                        }),
+                    );
                     async move {
                         match result.await? {
-                            #output_arm,
+                            #res_enum::#variant(result) => Ok(result),
                             _ => ::core::unreachable!(),
                         }
                     }

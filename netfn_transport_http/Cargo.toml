@@ -1,0 +1,13 @@
+[package]
+name = "netfn_transport_http"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+netfn_core = { version = "0.1.0", path = "../netfn_core" }
+reqwest = { version = "0.12.3", features = ["json"] }
+serde = "1.0.197"
+thiserror = "1.0.58"
+url = "2.5.0"
