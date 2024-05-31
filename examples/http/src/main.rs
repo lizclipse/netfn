@@ -1,20 +1,28 @@
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
-use axum::{
-    http::StatusCode,
-    routing::{any, post},
-    Json, Router,
-};
-use netfn::Service as _;
 use netfn_transport_http::HttpTransport;
-use serde_json::json;
 
-#[tokio::main]
-pub async fn main() {
+pub fn main() {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(example());
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        wasm_bindgen_futures::spawn_local(example());
+    }
+}
+
+pub async fn example() {
     #[cfg(not(target_arch = "wasm32"))]
     {
         tokio::spawn(serve());
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 
     let transport: HttpTransport = "http://localhost:3210/".try_into().unwrap();
@@ -58,6 +66,14 @@ pub async fn main() {
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn serve() {
+    use axum::{
+        http::StatusCode,
+        routing::{any, post},
+        Json, Router,
+    };
+    use netfn::Service as _;
+    use serde_json::json;
+
     // build our application with a single route
     let app = Router::new()
         .route(

@@ -66,7 +66,7 @@ impl<'a> Generator<'a> {
     }
 
     fn generate(&self) -> Result<TokenStream> {
-        let item_trait = self.rewrite_trait()?;
+        let (item_trait, item_trait_send) = self.rewrite_trait()?;
         let trait_impl = self.impl_service_trait();
         let fn_inputs = self.fn_inputs();
         let req_enum = self.request_enum();
@@ -82,7 +82,12 @@ impl<'a> Generator<'a> {
 
         Ok(quote! {
             #[allow(clippy::unused_async)]
+            #[cfg(target_arch = "wasm32")]
             #item_trait
+
+            #[allow(clippy::unused_async)]
+            #[cfg(not(target_arch = "wasm32"))]
+            #item_trait_send
 
             #[allow(clippy::manual_async_fn)]
             #trait_impl
@@ -99,27 +104,42 @@ impl<'a> Generator<'a> {
         })
     }
 
-    fn rewrite_trait(&self) -> Result<ItemTrait> {
+    fn rewrite_trait(&self) -> Result<(ItemTrait, ItemTrait)> {
         let Self { item_trait, .. } = self;
-        let mut item_trait = (*item_trait).clone();
+        let item_trait = (*item_trait).clone();
+        let item_trait_send = item_trait.clone();
 
-        for tfn in item_trait.items.iter_mut() {
-            let syn::TraitItem::Fn(tfn) = tfn else {
-                continue;
-            };
+        fn rewrite_inner(mut item_trait: ItemTrait, send: bool) -> Result<ItemTrait> {
+            for tfn in item_trait.items.iter_mut() {
+                let syn::TraitItem::Fn(tfn) = tfn else {
+                    continue;
+                };
 
-            if let None = tfn.sig.asyncness {
-                return Err(Error::new(tfn.span(), "Only async fns are supported"));
+                if let None = tfn.sig.asyncness {
+                    return Err(Error::new(tfn.span(), "Only async fns are supported"));
+                }
+                tfn.sig.asyncness = None;
+
+                let output = tfn_ret(&tfn);
+
+                if send {
+                    tfn.sig.output = parse_quote_spanned! {output.span() =>
+                        -> impl ::core::future::Future<Output = #output> + ::core::marker::Send
+                    }
+                } else {
+                    tfn.sig.output = parse_quote_spanned! {output.span() =>
+                        -> impl ::core::future::Future<Output = #output>
+                    }
+                }
             }
-            tfn.sig.asyncness = None;
 
-            let output = tfn_ret(&tfn);
-            tfn.sig.output = parse_quote_spanned! {output.span() =>
-                -> impl ::core::future::Future<Output = #output> + ::core::marker::Send
-            }
+            Ok(item_trait)
         }
 
-        Ok(item_trait)
+        Ok((
+            rewrite_inner(item_trait, false)?,
+            rewrite_inner(item_trait_send, true)?,
+        ))
     }
 
     fn impl_service_trait(&self) -> TokenStream {
@@ -133,19 +153,22 @@ impl<'a> Generator<'a> {
         } = self;
         let name = typ.to_string();
 
-        let branches = fns.iter().map(|tfn| {
-            let fn_name = &tfn.tfn.sig.ident;
-            let variant = &tfn.variant;
-            let args = tfn_args(&tfn.tfn).map(|(i, _inp)| quote!(req.#i));
+        let branches: Vec<_> = fns
+            .iter()
+            .map(|tfn| {
+                let fn_name = &tfn.tfn.sig.ident;
+                let variant = &tfn.variant;
+                let args = tfn_args(&tfn.tfn).map(|(i, _inp)| quote!(req.#i));
 
-            quote! {
-                $p::#priv_mod::#req_enum::#variant(req) => {
-                    $p::#priv_mod::#res_enum::#variant(self.#fn_name(
-                        #( #args ),*
-                    ).await)
+                quote! {
+                    $p::#priv_mod::#req_enum::#variant(req) => {
+                        $p::#priv_mod::#res_enum::#variant(self.#fn_name(
+                            #( #args ),*
+                        ).await)
+                    }
                 }
-            }
-        });
+            })
+            .collect();
 
         // This is way less than ideal, but it's the only way I can figure out how to do it for now.
         let macro_ident = format_ident!("impl_service_for_{}", priv_mod);
@@ -160,6 +183,17 @@ impl<'a> Generator<'a> {
                         type Request = $p::#priv_mod::#req_enum;
                         type Response = $p::#priv_mod::#res_enum;
 
+                        #[cfg(target_arch = "wasm32")]
+                        fn dispatch(&self, request: $p::#priv_mod::#req_enum)
+                            -> impl ::core::future::Future<Output = $p::#priv_mod::#res_enum> {
+                            async {
+                                match request {
+                                    #( #branches ),*
+                                }
+                            }
+                        }
+
+                        #[cfg(not(target_arch = "wasm32"))]
                         fn dispatch(&self, request: $p::#priv_mod::#req_enum)
                             -> impl ::core::future::Future<Output = $p::#priv_mod::#res_enum> + ::core::marker::Send {
                             async {
@@ -254,11 +288,13 @@ impl<'a> Generator<'a> {
         let fns = fns.iter().map(|tfn| {
             let name = &tfn.tfn.sig.ident;
 
-            let args = tfn_args(&tfn.tfn).map(|(_, inp)| {
-                let name = &inp.pat;
-                let typ = &inp.ty;
-                quote!(#name: #typ)
-            });
+            let args: Vec<_> = tfn_args(&tfn.tfn)
+                .map(|(_, inp)| {
+                    let name = &inp.pat;
+                    let typ = &inp.ty;
+                    quote!(#name: #typ)
+                })
+                .collect();
 
             let variant = &tfn.variant;
             let args_struct = &tfn.args;
@@ -268,9 +304,37 @@ impl<'a> Generator<'a> {
             });
             let output = tfn_ret(&tfn.tfn);
 
-            let docs = tfn_docs(&tfn.tfn);
+            let docs: Vec<_> = tfn_docs(&tfn.tfn).collect();
+
+            let body = quote! {
+                let result = self.transport.dispatch(
+                    Self::NAME,
+                    #req_enum::#variant(#args_struct {
+                        #(#variant_args),*
+                    }),
+                );
+                async move {
+                    match result.await? {
+                        #res_enum::#variant(result) => Ok(result),
+                        _ => ::core::unreachable!(),
+                    }
+                }
+            };
 
             quote! {
+                #[cfg(target_arch = "wasm32")]
+                #(#docs)*
+                pub fn #name<'a>(
+                    &'a self,
+                    #(#args),*
+                ) -> impl
+                    ::core::future::Future<Output = ::core::result::Result<#output, T::Error>>
+                  + 'a
+                {
+                    #body
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
                 #(#docs)*
                 pub fn #name<'a>(
                     &'a self,
@@ -280,18 +344,7 @@ impl<'a> Generator<'a> {
                   + ::core::marker::Send
                   + 'a
                 {
-                    let result = self.transport.dispatch(
-                        Self::NAME,
-                        #req_enum::#variant(#args_struct {
-                            #(#variant_args),*
-                        }),
-                    );
-                    async move {
-                        match result.await? {
-                            #res_enum::#variant(result) => Ok(result),
-                            _ => ::core::unreachable!(),
-                        }
-                    }
+                    #body
                 }
             }
         });

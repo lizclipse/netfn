@@ -13,6 +13,10 @@ pub trait Service {
 pub trait Transport<Req, Res> {
     type Error;
 
+    #[cfg(target_arch = "wasm32")]
+    fn dispatch(&self, name: &str, request: Req) -> impl Future<Output = Result<Res, Self::Error>>;
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn dispatch(
         &self,
         name: &str,
@@ -26,6 +30,12 @@ where
 {
     type Error = E;
 
+    #[cfg(target_arch = "wasm32")]
+    fn dispatch(&self, name: &str, request: Req) -> impl Future<Output = Result<Res, Self::Error>> {
+        (&**self).dispatch(name, request)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn dispatch(
         &self,
         name: &str,
