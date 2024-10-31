@@ -7,4 +7,4 @@ publish = false
 [dependencies]
 netfn = { path = "../.." }
 netfn_transport_channel = { path = "../../netfn_transport_channel" }
-tokio = { version = "1.37.0", features = ["full"] }
+tokio = { version = "1.41.0", features = ["full"] }

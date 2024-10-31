@@ -7,11 +7,11 @@ edition = "2021"
 
 [dependencies]
 case = "1.0.0"
-darling = "0.20.8"
-proc-macro2 = "1.0.79"
-quote = "1.0.35"
-serde = { version = "1.0.197", features = ["derive"], optional = true }
-syn = { version = "2.0.55", default-features = false, features = ["full", "parsing", "printing", "extra-traits", "visit-mut", "clone-impls"] }
+darling = "0.20.10"
+proc-macro2 = "1.0.89"
+quote = "1.0.37"
+serde = { version = "1.0.214", features = ["derive"], optional = true }
+syn = { version = "2.0.85", default-features = false, features = ["full", "parsing", "printing", "extra-traits", "visit-mut", "clone-impls"] }
 
 [features]
 serde = ["dep:serde"]
