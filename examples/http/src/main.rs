@@ -77,7 +77,7 @@ async fn serve() {
     // build our application with a single route
     let app = Router::new()
         .route(
-            &format!("/{}", TestService::NAME),
+            "/",
             post(|Json(req): Json<test_api::TestApiRequest>| async {
                 let service = TestService;
                 println!("{:#?}", req);

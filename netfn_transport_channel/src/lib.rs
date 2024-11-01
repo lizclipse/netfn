@@ -1,13 +1,13 @@
 #![warn(clippy::pedantic)]
 
 use futures_channel::{mpsc, oneshot};
-use futures_util::{lock::Mutex, sink::SinkExt as _, StreamExt as _};
+use futures_util::{sink::SinkExt as _, StreamExt as _};
 use netfn_core::{Service, Transport};
 use thiserror::Error;
 
 #[derive(Debug)]
 pub struct ChannelTransport<Req, Res> {
-    tx: Mutex<mpsc::Sender<(Req, oneshot::Sender<Res>)>>,
+    tx: mpsc::Sender<(Req, oneshot::Sender<Res>)>,
 }
 
 impl<Req, Res> ChannelTransport<Req, Res>
@@ -21,7 +21,7 @@ where
         S: Service<Request = Req, Response = Res>,
     {
         let (tx, rx) = mpsc::channel(buffer_size);
-        (Self { tx: Mutex::new(tx) }, ChannelListener { rx, service })
+        (Self { tx }, ChannelListener { rx, service })
     }
 }
 
@@ -51,9 +51,10 @@ where
 {
     type Error = TransportError;
 
-    async fn dispatch(&self, _name: &str, request: Req) -> Result<Res, Self::Error> {
+    async fn dispatch(&self, request: Req) -> Result<Res, Self::Error> {
+        let mut tx = self.tx.clone();
         let (otx, orx) = oneshot::channel();
-        self.tx.lock().await.send((request, otx)).await?;
+        tx.send((request, otx)).await?;
         Ok(orx.await?)
     }
 }

@@ -61,11 +61,10 @@ where
 {
     type Error = TransportError;
 
-    async fn dispatch(&self, name: &str, request: Req) -> Result<Res, Self::Error> {
-        let url = self.url.join(name)?;
+    async fn dispatch(&self, request: Req) -> Result<Res, Self::Error> {
         let result = self
             .client
-            .post(url)
+            .post(self.url.clone())
             .json(&request)
             .send()
             .await?

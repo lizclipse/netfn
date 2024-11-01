@@ -30,7 +30,6 @@ pub fn service_generate(args: TokenStream, input: TokenStream) -> Result<TokenSt
 
 struct Generator<'a> {
     item_trait: &'a ItemTrait,
-    typ: &'a Ident,
     vis: Visibility,
     fns: Vec<ServiceFn>,
     priv_mod: Ident,
@@ -44,7 +43,6 @@ impl<'a> Generator<'a> {
         let typ = &item_trait.ident;
         Ok(Self {
             item_trait,
-            typ,
             vis,
             fns: Self::collect_fns(typ, item_trait),
             priv_mod: Ident::new(&typ.to_string().to_snake(), typ.span()),
@@ -144,15 +142,12 @@ impl<'a> Generator<'a> {
 
     fn impl_service_trait(&self) -> TokenStream {
         let Self {
-            typ,
             fns,
             priv_mod,
             req_enum,
             res_enum,
             ..
         } = self;
-        let name = typ.to_string();
-
         let branches: Vec<_> = fns
             .iter()
             .map(|tfn| {
@@ -179,7 +174,6 @@ impl<'a> Generator<'a> {
                     #[allow(dead_code)]
                     #[allow(unused_variables)]
                     impl ::netfn::Service for $t {
-                        const NAME: &'static str = #name;
                         type Request = $p::#priv_mod::#req_enum;
                         type Response = $p::#priv_mod::#res_enum;
 
@@ -276,15 +270,12 @@ impl<'a> Generator<'a> {
 
     fn impl_service_client(&self) -> TokenStream {
         let Self {
-            typ,
             fns,
             client,
             req_enum,
             res_enum,
             ..
         } = self;
-        let name = typ.to_string();
-
         let fns = fns.iter().map(|tfn| {
             let name = &tfn.tfn.sig.ident;
 
@@ -308,7 +299,6 @@ impl<'a> Generator<'a> {
 
             let body = quote! {
                 let result = self.transport.dispatch(
-                    Self::NAME,
                     #req_enum::#variant(#args_struct {
                         #(#variant_args),*
                     }),
@@ -356,8 +346,6 @@ impl<'a> Generator<'a> {
             }
 
             impl<T> #client<T> #bound {
-                const NAME: &'static str = #name;
-
                 pub fn new(transport: T) -> Self {
                     Self { transport }
                 }
