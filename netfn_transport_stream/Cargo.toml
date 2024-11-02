@@ -5,10 +5,7 @@ edition = "2021"
 
 [dependencies]
 cmnsocket = { version = "0.1.0", path = "../../cmnsocket" }
-futures-channel = { version = "0.3.31", features = ["sink"] }
-futures-core = { version = "0.3.31", default-features = false, features = ["std"] }
-futures-sink = { version = "0.3.31", default-features = false, features = ["std"] }
-futures-util = { version = "0.3.31", default-features = false, features = ["sink", "std"] }
+futures = { version = "0.3.31", default-features = false, features = ["async-await", "std"] }
 netfn_core = { version = "0.1.0", path = "../netfn_core" }
 serde = { version = "1.0.214", features = ["derive"] }
 thiserror = "1.0.65"
