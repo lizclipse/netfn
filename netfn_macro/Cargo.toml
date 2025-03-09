@@ -6,11 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-netfn_gen = { version = "0.1.0", path = "../netfn_gen" }
-syn = { version = "2.0.85", default-features = false }
+netfn_codegen = { version = "0.1.0", path = "../netfn_codegen" }
+syn = { version = "2.0.99", default-features = false }
 
 [lib]
 proc-macro = true
 
 [features]
-serde = ["netfn_gen/serde"]
+serde = ["netfn_codegen/serde"]

@@ -9,4 +9,4 @@ edition = "2021"
 futures-channel = { version = "0.3.31", features = ["sink"] }
 futures-util = { version = "0.3.31", default-features = false, features = ["sink", "std"] }
 netfn_core = { version = "0.1.0", path = "../netfn_core" }
-thiserror = "1.0.65"
+thiserror = "2.0.12"

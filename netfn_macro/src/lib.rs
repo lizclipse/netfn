@@ -1,6 +1,6 @@
 #![warn(clippy::pedantic)]
 
-use netfn_gen::service_generate;
+use netfn_codegen::service_generate;
 use proc_macro::TokenStream;
 
 #[proc_macro_attribute]

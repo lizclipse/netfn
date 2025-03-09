@@ -6,5 +6,5 @@ edition = "2021"
 [dependencies]
 netfn = { path = "../..", features = ["serde"] }
 netfn_transport_ws = { version = "0.1.0", path = "../../netfn_transport_stream" }
-tokio = { version = "1.41.0", features = ["full"] }
-tungstenite = "0.24.0"
+tokio = { version = "1.44.0", features = ["full"] }
+tungstenite = "0.26.2"
