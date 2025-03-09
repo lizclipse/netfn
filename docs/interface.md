@@ -51,7 +51,7 @@ interface CallResponseRequest {
   service: string; // Using an adjacently-tagged representation
   call: {
     fn: string; // Using an adjacently-tagged representation,
-    // Args is an object to allow optional field to be omitted and to enforce ordering.
+    // Args is an object to allow optional fields to be omitted and to enforce ordering.
     // By using an object and string keys, it allows implementations to define the arguments in
     // terms of structs, simplifying implementation and reducing the need for custom JSON (de)serialising.
     args: Record<string, any>;
