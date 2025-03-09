@@ -8,6 +8,29 @@ Each message schema is defined using TypeScript, as it allows very specific but 
 syntax.
 Some 'custom' types are used, but only to be more specific where TypeScript is not (such as ints).
 
+- [Call-response](#call-response)
+  - [Request](#request)
+  - [Response](#response)
+  - [Errors](#errors)
+- [Tunnel](#tunnel)
+  - [Function calls](#function-calls)
+    - [Request](#request-1)
+    - [Response](#response-1)
+  - [Streams](#streams)
+    - [Stream open](#stream-open)
+    - [Stream opened](#stream-opened)
+    - [Message](#message)
+    - [Close](#close)
+  - [Errors](#errors-1)
+    - [Call error](#call-error)
+    - [Stream error](#stream-error)
+    - [Stream open error](#stream-open-error)
+- [Transports](#transports)
+  - [HTTP](#http)
+    - [Endpoint](#endpoint)
+    - [Headers](#headers)
+  - [WebSocket](#websocket)
+
 ## Call-response
 
 For things like HTTP, the nature of the transport only truly allows for a simple call-response.
@@ -75,26 +98,6 @@ Example, using JSON:
   "message": "..."
 }
 ```
-
-### HTTP
-
-#### Endpoint
-
-Any endpoint is allowed, such as:
-
-```
-/api/v1
-```
-
-All requests are made to this endpoint, with the contents determining what function is called.
-
-#### Headers
-
-Only the `Content-Type` header is required, all others are up to the server implementors
-to use how they see fit.
-All implementors have to support JSON, other encodings can be supported as needed or wanted.
-MessagePack is a good option to support, as it will then match the supported encodings of WebSocket
-tunnels.
 
 ## Tunnel
 
@@ -365,8 +368,29 @@ Example, using JSON:
 }
 ```
 
+## Transports
 
-### WS
+### HTTP
+
+#### Endpoint
+
+Any endpoint is allowed, such as:
+
+```
+/api/v1
+```
+
+All requests are made to this endpoint, with the contents determining what function is called.
+
+#### Headers
+
+Only the `Content-Type` header is required, all others are up to the server implementors
+to use how they see fit.
+All implementors have to support JSON, other encodings can be supported as needed or wanted.
+MessagePack is a good option to support, as it will then match the supported encodings of WebSocket
+tunnels.
+
+### WebSocket
 
 WebSockets allow for both text and binary messages, which can both be used.
 Text messages are expected to be JSON, and binary ones MessagePack.
