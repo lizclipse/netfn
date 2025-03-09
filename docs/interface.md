@@ -10,9 +10,7 @@ Some 'custom' types are used, but only to be more specific where TypeScript is n
 
 ## Call-response
 
-For things like HTTP, the nature of the transport only allows for a simple call-response
-(more recent versions do support things like long-polling, but this is a band-aid
-solution and not great for a generic protocol).
+For things like HTTP, the nature of the transport only truly allows for a simple call-response.
 This kind of thing can work for for simple function calls, but not for any sort of
 bi-directional stream, which is possible via the [tunnel interface](#Tunnel).
 A simple transport like HTTP does, however, allow for simple scratch testing when learning
@@ -20,7 +18,7 @@ an API in the first place, so offering one makes it easier to onboard new devs e
 a client library is provided.
 It also allows for 1-off requests to be made without the overhead of opening a full tunnel.
 
-- Request
+### Request
 
 Each request has to specify the target service, the function being called, and all of
 the arguments in the function that are required.
@@ -55,12 +53,12 @@ Example, using JSON:
 }
 ```
 
-- Response
+### Response
 
 As call-response transports implicitly link the response to the request that was made,
 requests are simply the exact result object, without any extra wrapping object.
 
-- Errors
+### Errors
 
 ```ts
 interface GenericError {
@@ -80,7 +78,7 @@ Example, using JSON:
 
 ### HTTP
 
-- Endpoint
+#### Endpoint
 
 Any endpoint is allowed, such as:
 
@@ -90,7 +88,7 @@ Any endpoint is allowed, such as:
 
 All requests are made to this endpoint, with the contents determining what function is called.
 
-- Headers
+#### Headers
 
 Only the `Content-Type` header is required, all others are up to the server implementors
 to use how they see fit.
@@ -108,7 +106,7 @@ a HTTP transport for scratch-testing.
 
 ### Function calls
 
-- Request
+#### Request
 
 Inside a tunnel, the requests look very similar to call-response requests, and this is intentional.
 By keeping them identical, except for additional routing fields, it allows the server to process the
@@ -146,7 +144,7 @@ Example, using JSON:
 }
 ```
 
-- Response
+#### Response
 
 To keep continuity, a `ref` field is used to allow linking the request and response together.
 If a response is sent to an unknown ref, the client may drop it silently, but it is recommended
@@ -181,7 +179,7 @@ handling, allowing the same call to be available in a call-response only transpo
 While these handlers _may_ have different arguments, it is recommended that servers provide the same
 to reduce confusion when in use.
 
-- Stream open
+#### Stream open
 
 ```ts
 interface TunnelStreamOpen extends CallResponseRequest {
@@ -215,7 +213,7 @@ Example, using JSON:
 }
 ```
 
-- Stream opened
+#### Stream opened
 
 ```ts
 interface TunnelStreamReady {
@@ -240,7 +238,7 @@ Example, using JSON:
 }
 ```
 
-- Message
+#### Message
 
 Stream messages may be set in either direction, however if a side isn't expecting messages then
 the other must send an error on the same handle to inform the other side that this stream does not
@@ -266,7 +264,7 @@ Example, using JSON:
 }
 ```
 
-- Close
+#### Close
 
 Streams may be closed by either side, and any messages set to this stream will be silently dropped
 after this point.
@@ -342,7 +340,9 @@ Example, using JSON:
 }
 ```
 
-If a `stream_open` request errors, then the following is used:
+#### Stream Open Error
+
+If an errors occurs while the stream is opening, then a dedicated response is needed.
 
 ```ts
 interface TunnelStreamOpenError {
