@@ -1,24 +1,51 @@
 [workspace]
 members = [
-  "netfn_*",
   "examples/*",
+  "netfn_*",
 ]
-
 default-members = [
   "netfn_*",
 ]
 
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+axum = "0.8.1"
+case = "1.0.0"
+darling = "0.20.10"
+futures = { version = "0.3.31", default-features = false, features = ["async-await", "std"] }
+netfn = { version = "0.1.0", path = "." }
+netfn_codegen = { version = "0.1.0", path = "netfn_codegen" }
+netfn_core = { version = "0.1.0", path = "netfn_core" }
+netfn_macro = { version = "0.1.0", path = "netfn_macro" }
+netfn_transport_channel = { version = "0.1.0", path = "netfn_transport_channel" }
+netfn_transport_http = { version = "0.1.0", path = "netfn_transport_http" }
+netfn_transport_stream = { version = "0.1.0", path = "netfn_transport_stream" }
+proc-macro2 = "1.0.94"
+quote = "1.0.39"
+reqwest = { version = "0.12.12" }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+syn = { version = "2.0.99", default-features = false }
+thiserror = "2.0.12"
+tokio = { version = "1.44.0" }
+tungstenite = "0.26.2"
+url = "2.5.4"
+wasm-bindgen-futures = "0.4.50"
+
 [package]
 name = "netfn"
-version = "0.1.0"
-edition = "2021"
+version = { workspace = true }
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-netfn_core = { version = "0.1.0", path = "netfn_core" }
-netfn_macro = { version = "0.1.0", path = "netfn_macro" }
-serde = { version = "1.0.219", features = ["derive"], optional = true }
+netfn_core = { workspace = true }
+netfn_macro = { workspace = true }
+serde = { workspace = true, optional = true }
 
 [features]
 serde = ["netfn_macro/serde", "dep:serde"]

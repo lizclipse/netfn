@@ -1,13 +1,13 @@
 [package]
 name = "netfn_transport_http"
-version = "0.1.0"
-edition = "2021"
+version = { workspace = true }
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-netfn_core = { version = "0.1.0", path = "../netfn_core" }
-reqwest = { version = "0.12.12", features = ["json"] }
-serde = "1.0.219"
-thiserror = "2.0.12"
-url = "2.5.4"
+netfn_core = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }

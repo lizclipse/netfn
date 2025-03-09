@@ -1,6 +1,6 @@
 #![warn(clippy::pedantic)]
 
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 pub trait Service {
     type Request;

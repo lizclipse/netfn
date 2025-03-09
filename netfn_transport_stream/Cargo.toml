@@ -1,11 +1,10 @@
 [package]
 name = "netfn_transport_ws"
-version = "0.1.0"
-edition = "2021"
+version = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-cmnsocket = { version = "0.1.0", path = "../../cmnsocket" }
-futures = { version = "0.3.31", default-features = false, features = ["async-await", "std"] }
-netfn_core = { version = "0.1.0", path = "../netfn_core" }
-serde = { version = "1.0.219", features = ["derive"] }
-thiserror = "2.0.12"
+futures = { workspace = true }
+netfn_core = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

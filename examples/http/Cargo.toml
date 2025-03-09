@@ -1,17 +1,17 @@
 [package]
 name = "example_http"
-version = "0.1.0"
-edition = "2021"
+version = { workspace = true }
+edition = { workspace = true }
 publish = false
 
 [dependencies]
-netfn = { path = "../..", features = ["serde"] }
+netfn = { workspace = true, features = ["serde"] }
 netfn_transport_http = { path = "../../netfn_transport_http" }
-serde_json = "1.0.140"
+serde_json = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-axum = "0.8.1"
-tokio = { version = "1.44.0", features = ["full"] }
+axum = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen-futures = "0.4.50"
+wasm-bindgen-futures = { workspace = true }

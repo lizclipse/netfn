@@ -1,17 +1,17 @@
 [package]
 name = "netfn_codegen"
-version = "0.1.0"
-edition = "2021"
+version = { workspace = true }
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-case = "1.0.0"
-darling = "0.20.10"
-proc-macro2 = "1.0.94"
-quote = "1.0.39"
-serde = { version = "1.0.219", features = ["derive"], optional = true }
-syn = { version = "2.0.99", default-features = false, features = ["full", "parsing", "printing", "extra-traits", "visit-mut", "clone-impls"] }
+case = { workspace = true }
+darling = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+serde = { workspace = true, optional = true }
+syn = { workspace = true, features = ["full", "parsing", "printing", "extra-traits", "visit-mut", "clone-impls"] }
 
 [features]
 serde = ["dep:serde"]
