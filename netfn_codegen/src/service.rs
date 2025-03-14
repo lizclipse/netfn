@@ -2,12 +2,12 @@
 #![allow(clippy::similar_names)]
 
 use case::CaseExt as _;
-use darling::{ast::NestedMeta, FromMeta};
+use darling::{FromMeta, ast::NestedMeta};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
 use syn::{
-    parse_quote, parse_quote_spanned, spanned::Spanned as _, Attribute, Error, FnArg, ItemTrait,
-    Meta, PatType, Result, ReturnType, TraitItemFn, Visibility,
+    Attribute, Error, FnArg, ItemTrait, Meta, PatType, Result, ReturnType, TraitItemFn, Visibility,
+    parse_quote, parse_quote_spanned, spanned::Spanned as _,
 };
 
 #[cfg(feature = "serde")]
@@ -65,7 +65,7 @@ impl<'a> Generator<'a> {
 
     fn generate(&self) -> Result<TokenStream> {
         let (item_trait, item_trait_send) = self.rewrite_trait()?;
-        let trait_impl = self.impl_service_trait();
+        let (trait_impl, trait_into) = self.impl_service_trait();
         let fn_inputs = self.fn_inputs();
         let req_enum = self.request_enum();
         let res_enum = self.response_enum();
@@ -87,12 +87,12 @@ impl<'a> Generator<'a> {
             #[cfg(not(target_arch = "wasm32"))]
             #item_trait_send
 
-            #[allow(clippy::manual_async_fn)]
-            #trait_impl
+            #trait_into
 
             #[allow(dead_code, clippy::manual_async_fn)]
             #vis mod #priv_mod {
                 use super::*;
+                #trait_impl
                 #fn_inputs
                 #req_enum
                 #res_enum
@@ -140,8 +140,10 @@ impl<'a> Generator<'a> {
         ))
     }
 
-    fn impl_service_trait(&self) -> TokenStream {
+    fn impl_service_trait(&self) -> (TokenStream, TokenStream) {
         let Self {
+            item_trait,
+            vis,
             fns,
             priv_mod,
             req_enum,
@@ -156,8 +158,8 @@ impl<'a> Generator<'a> {
                 let args = tfn_args(&tfn.tfn).map(|(i, _inp)| quote!(req.#i));
 
                 quote! {
-                    $p::#priv_mod::#req_enum::#variant(req) => {
-                        $p::#priv_mod::#res_enum::#variant(self.#fn_name(
+                    #priv_mod::#req_enum::#variant(req) => {
+                        #priv_mod::#res_enum::#variant(self.0.#fn_name(
                             #( #args ),*
                         ).await)
                     }
@@ -165,41 +167,67 @@ impl<'a> Generator<'a> {
             })
             .collect();
 
-        // This is way less than ideal, but it's the only way I can figure out how to do it for now.
-        let macro_ident = format_ident!("impl_service_for_{}", priv_mod);
-        quote! {
-            #[allow(unused_macros)]
-            macro_rules! #macro_ident {
-                ($t: ty, $p: tt) => {
-                    #[allow(dead_code)]
-                    #[allow(unused_variables)]
-                    impl ::netfn::Service for $t {
-                        type Request = $p::#priv_mod::#req_enum;
-                        type Response = $p::#priv_mod::#res_enum;
+        let container_name = format_ident!("{}Container", &item_trait.ident);
+        let typ_ext = format_ident!("{}Ext", &item_trait.ident);
+        let typ = &item_trait.ident;
+        let name = &item_trait.ident.to_string();
 
-                        #[cfg(target_arch = "wasm32")]
-                        fn dispatch(&self, request: $p::#priv_mod::#req_enum)
-                            -> impl ::core::future::Future<Output = $p::#priv_mod::#res_enum> {
-                            async {
-                                match request {
-                                    #( #branches ),*
-                                }
-                            }
-                        }
+        let part_impl = quote! {
+            const NAME: &'static str = #name;
+            type Request = #priv_mod::#req_enum;
+            type Response = #priv_mod::#res_enum;
+        };
 
-                        #[cfg(not(target_arch = "wasm32"))]
-                        fn dispatch(&self, request: $p::#priv_mod::#req_enum)
-                            -> impl ::core::future::Future<Output = $p::#priv_mod::#res_enum> + ::core::marker::Send {
-                            async {
-                                match request {
-                                    #( #branches ),*
-                                }
+        (
+            quote! {
+                pub struct #container_name<T>(pub T);
+
+                #[cfg(target_arch = "wasm32")]
+                impl<T> ::netfn::Service for #container_name<T> where T: #typ {
+                    #part_impl
+
+                    fn dispatch(&self, request: #priv_mod::#req_enum)
+                        -> impl ::core::future::Future<Output = #priv_mod::#res_enum> {
+                        async {
+                            match request {
+                                #( #branches ),*
                             }
                         }
                     }
                 }
-            }
-        }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                impl<T> ::netfn::Service for #container_name<T> where T: #typ + ::core::marker::Sync {
+                    #part_impl
+
+                    fn dispatch(&self, request: #priv_mod::#req_enum)
+                        -> impl ::core::future::Future<Output = #priv_mod::#res_enum> + ::core::marker::Send {
+                        async {
+                            match request {
+                                #( #branches ),*
+                            }
+                        }
+                    }
+                }
+
+                impl<T> From<T> for #container_name<T> {
+                    fn from(value: T) -> Self {
+                        #container_name(value)
+                    }
+                }
+            },
+            quote! {
+                #vis trait #typ_ext<T> {
+                    fn into_service(self) -> #priv_mod::#container_name<T>;
+                }
+
+                impl<T> #typ_ext<T> for T where T: #typ {
+                    fn into_service(self) -> #priv_mod::#container_name<T> {
+                        #priv_mod::#container_name(self)
+                    }
+                }
+            },
+        )
     }
 
     fn fn_inputs(&self) -> TokenStream {

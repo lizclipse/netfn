@@ -67,9 +67,9 @@ pub async fn example() {
 #[cfg(not(target_arch = "wasm32"))]
 async fn serve() {
     use axum::{
+        Json, Router,
         http::StatusCode,
         routing::{any, post},
-        Json, Router,
     };
     use netfn::Service as _;
     use serde_json::json;
@@ -79,7 +79,7 @@ async fn serve() {
         .route(
             "/",
             post(|Json(req): Json<test_api::TestApiRequest>| async {
-                let service = TestService;
+                let service = TestService.into_service();
                 println!("{:#?}", req);
                 Json(service.dispatch(req).await)
             }),
@@ -117,7 +117,6 @@ trait TestApi {
 
 struct TestService;
 
-impl_service_for_test_api!(TestService, self);
 impl TestApi for TestService {
     /// Foo documentation
     ///

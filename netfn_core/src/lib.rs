@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 pub trait Service {
+    const NAME: &'static str;
     type Request;
     type Response;
 

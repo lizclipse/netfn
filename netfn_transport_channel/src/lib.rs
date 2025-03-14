@@ -24,7 +24,13 @@ where
         S: Service<Request = Req, Response = Res>,
     {
         let (tx, rx) = mpsc::channel(buffer_size);
-        (Self { tx }, ChannelListener { rx, service })
+        (
+            Self { tx },
+            ChannelListener {
+                rx,
+                service: service.into(),
+            },
+        )
     }
 }
 

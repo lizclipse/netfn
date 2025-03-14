@@ -8,7 +8,7 @@ use netfn_transport_channel::ChannelTransport;
 pub async fn main() {
     let service = TestService;
 
-    let (transport, listener) = ChannelTransport::new(service, 128);
+    let (transport, listener) = ChannelTransport::new(service.into_service(), 128);
 
     tokio::spawn(listener.listen());
 
@@ -44,27 +44,32 @@ pub async fn main() {
     println!("<<<<\n");
 }
 
-#[netfn::service]
-trait TestApi {
-    /// Foo documentation
-    ///
-    /// More docs
-    async fn foo(&self);
+mod api {
+    use std::collections::HashMap;
 
-    /// Bar docs
-    #[allow(clippy::unused_unit)]
-    async fn bar(&self, inp: bool) -> ();
+    #[netfn::service]
+    pub trait TestApi {
+        /// Foo documentation
+        ///
+        /// More docs
+        async fn foo(&self);
 
-    async fn baz(&self) -> u32;
+        /// Bar docs
+        #[allow(clippy::unused_unit)]
+        async fn bar(&self, inp: bool) -> ();
 
-    async fn qaz(&self, inp: String) -> Vec<String>;
+        async fn baz(&self) -> u32;
 
-    async fn qoz(&self, inp: HashMap<String, String>, val: i16) -> Result<bool, String>;
+        async fn qaz(&self, inp: String) -> Vec<String>;
+
+        async fn qoz(&self, inp: HashMap<String, String>, val: i16) -> Result<bool, String>;
+    }
 }
+
+use api::{TestApi, TestApiClient, TestApiExt as _};
 
 struct TestService;
 
-impl_service_for_test_api!(TestService, self);
 impl TestApi for TestService {
     async fn foo(&self) {
         println!("[foo]");
