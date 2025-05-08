@@ -45,7 +45,3 @@ edition = { workspace = true }
 [dependencies]
 netfn_core = { workspace = true }
 netfn_macro = { workspace = true }
-serde = { workspace = true, optional = true }
-
-[features]
-serde = ["netfn_macro/serde", "dep:serde"]

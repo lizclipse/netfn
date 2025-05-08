@@ -2,11 +2,13 @@
 
 use std::convert::Infallible;
 
-use netfn_core::Transport;
+use netfn_core::{CallResponseRequest, GenericError, Transport};
 use reqwest::Client;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use url::{ParseError, Url};
+
+const HANDLER_ERROR_CODE: u16 = 537;
 
 #[derive(Debug, Clone)]
 pub struct HttpTransport {
@@ -54,31 +56,37 @@ pub enum Error<C> {
     Convert(#[from] C),
 }
 
-impl<Req, Res> Transport<Req, Res> for HttpTransport
-where
-    Req: Send + Serialize + std::fmt::Debug,
-    Res: Send + DeserializeOwned,
-{
+impl Transport for HttpTransport {
     type Error = TransportError;
 
-    async fn dispatch(&self, request: Req) -> Result<Res, Self::Error> {
-        let result = self
+    async fn call<Req, Res>(&self, service: &'static str, request: Req) -> Result<Res, Self::Error>
+    where
+        Req: netfn_core::compat::NetfnSend + Serialize,
+        Res: netfn_core::compat::NetfnSend + DeserializeOwned,
+    {
+        let response = self
             .client
             .post(self.url.clone())
-            .json(&request)
+            .json(&CallResponseRequest {
+                service: service.into(),
+                call: request,
+            })
             .send()
-            .await?
-            .json()
             .await?;
 
-        Ok(result)
+        if response.status().as_u16() == HANDLER_ERROR_CODE {
+            let err: GenericError<'static> = response.json().await?;
+            return Err(err.into());
+        }
+
+        Ok(response.json().await?)
     }
 }
 
 #[derive(Error, Debug)]
 pub enum TransportError {
-    #[error("failed to parse url: {0}")]
-    Parse(#[from] ParseError),
     #[error("failed to make request: {0}")]
     Request(#[from] reqwest::Error),
+    #[error("{0}")]
+    Handler(#[from] netfn_core::GenericError<'static>),
 }

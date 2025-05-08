@@ -275,15 +275,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "example_channel"
-version = "0.1.0"
-dependencies = [
- "netfn",
- "netfn_transport_channel",
- "tokio",
-]
-
-[[package]]
 name = "example_http"
 version = "0.1.0"
 dependencies = [
@@ -872,7 +863,6 @@ version = "0.1.0"
 dependencies = [
  "netfn_core",
  "netfn_macro",
- "serde",
 ]
 
 [[package]]
@@ -890,6 +880,9 @@ dependencies = [
 [[package]]
 name = "netfn_core"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "netfn_macro"
@@ -897,15 +890,6 @@ version = "0.1.0"
 dependencies = [
  "netfn_codegen",
  "syn",
-]
-
-[[package]]
-name = "netfn_transport_channel"
-version = "0.1.0"
-dependencies = [
- "futures",
- "netfn_core",
- "thiserror",
 ]
 
 [[package]]

@@ -4,6 +4,6 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-netfn = { workspace = true, features = ["serde"] }
+netfn = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tungstenite = { workspace = true }

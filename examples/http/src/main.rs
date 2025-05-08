@@ -81,7 +81,7 @@ async fn serve() {
             post(|Json(req): Json<test_api::TestApiRequest>| async {
                 let service = TestService.into_service();
                 println!("{:#?}", req);
-                Json(service.dispatch(req).await)
+                Json(service.call(req).await)
             }),
         )
         .fallback(any(|| async {

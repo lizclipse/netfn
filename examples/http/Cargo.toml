@@ -5,8 +5,8 @@ edition = { workspace = true }
 publish = false
 
 [dependencies]
-netfn = { workspace = true, features = ["serde"] }
-netfn_transport_http = { path = "../../netfn_transport_http" }
+netfn = { workspace = true }
+netfn_transport_http = { workspace = true }
 serde_json = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

@@ -10,9 +10,6 @@ use syn::{
     parse_quote, parse_quote_spanned, spanned::Spanned as _,
 };
 
-#[cfg(feature = "serde")]
-pub use serde;
-
 #[derive(Debug, FromMeta)]
 struct Args {
     vis: Option<Visibility>,
@@ -32,10 +29,12 @@ struct Generator<'a> {
     item_trait: &'a ItemTrait,
     vis: Visibility,
     fns: Vec<ServiceFn>,
-    priv_mod: Ident,
-    req_enum: Ident,
-    res_enum: Ident,
-    client: Ident,
+    ident_priv_mod: Ident,
+    ident_container: Ident,
+    ident_ext_trait: Ident,
+    ident_req_enum: Ident,
+    ident_res_enum: Ident,
+    ident_client: Ident,
 }
 
 impl<'a> Generator<'a> {
@@ -45,10 +44,12 @@ impl<'a> Generator<'a> {
             item_trait,
             vis,
             fns: Self::collect_fns(typ, item_trait),
-            priv_mod: Ident::new(&typ.to_string().to_snake(), typ.span()),
-            req_enum: format_ident!("{}Request", typ),
-            res_enum: format_ident!("{}Response", typ),
-            client: format_ident!("{}Client", typ),
+            ident_priv_mod: Ident::new(&typ.to_string().to_snake(), typ.span()),
+            ident_container: format_ident!("{}Container", &item_trait.ident),
+            ident_ext_trait: format_ident!("{}Ext", &item_trait.ident),
+            ident_req_enum: format_ident!("{}Request", typ),
+            ident_res_enum: format_ident!("{}Response", typ),
+            ident_client: format_ident!("{}Client", typ),
         })
     }
 
@@ -64,7 +65,7 @@ impl<'a> Generator<'a> {
     }
 
     fn generate(&self) -> Result<TokenStream> {
-        let (item_trait, item_trait_send) = self.rewrite_trait()?;
+        let item_trait = self.rewrite_trait()?;
         let (trait_impl, trait_into) = self.impl_service_trait();
         let fn_inputs = self.fn_inputs();
         let req_enum = self.request_enum();
@@ -72,25 +73,22 @@ impl<'a> Generator<'a> {
         let client_impl = self.impl_service_client();
 
         let Self {
-            priv_mod,
-            client,
+            ident_priv_mod,
+            ident_client,
             vis,
             ..
         } = self;
 
         Ok(quote! {
             #[allow(clippy::unused_async)]
-            #[cfg(target_arch = "wasm32")]
             #item_trait
 
-            #[allow(clippy::unused_async)]
-            #[cfg(not(target_arch = "wasm32"))]
-            #item_trait_send
-
+            #[doc(hidden)]
             #trait_into
 
+            #[doc(hidden)]
             #[allow(dead_code, clippy::manual_async_fn)]
-            #vis mod #priv_mod {
+            #vis mod #ident_priv_mod {
                 use super::*;
                 #trait_impl
                 #fn_inputs
@@ -98,46 +96,32 @@ impl<'a> Generator<'a> {
                 #res_enum
                 #client_impl
             }
-            #vis use self::#priv_mod::#client;
+            #vis use self::#ident_priv_mod::#ident_client;
         })
     }
 
-    fn rewrite_trait(&self) -> Result<(ItemTrait, ItemTrait)> {
+    fn rewrite_trait(&self) -> Result<ItemTrait> {
         let Self { item_trait, .. } = self;
-        let item_trait = (*item_trait).clone();
-        let item_trait_send = item_trait.clone();
+        let mut item_trait = (*item_trait).clone();
 
-        fn rewrite_inner(mut item_trait: ItemTrait, send: bool) -> Result<ItemTrait> {
-            for tfn in item_trait.items.iter_mut() {
-                let syn::TraitItem::Fn(tfn) = tfn else {
-                    continue;
-                };
+        for tfn in item_trait.items.iter_mut() {
+            let syn::TraitItem::Fn(tfn) = tfn else {
+                continue;
+            };
 
-                if let None = tfn.sig.asyncness {
-                    return Err(Error::new(tfn.span(), "Only async fns are supported"));
-                }
-                tfn.sig.asyncness = None;
-
-                let output = tfn_ret(&tfn);
-
-                if send {
-                    tfn.sig.output = parse_quote_spanned! {output.span() =>
-                        -> impl ::core::future::Future<Output = #output> + ::core::marker::Send
-                    }
-                } else {
-                    tfn.sig.output = parse_quote_spanned! {output.span() =>
-                        -> impl ::core::future::Future<Output = #output>
-                    }
-                }
+            if let None = tfn.sig.asyncness {
+                return Err(Error::new(tfn.span(), "Only async fns are supported"));
             }
+            tfn.sig.asyncness = None;
 
-            Ok(item_trait)
+            let output = tfn_ret(&tfn);
+
+            tfn.sig.output = parse_quote_spanned! {output.span() =>
+                -> impl ::core::future::Future<Output = #output> + ::netfn::compat::NetfnSend
+            }
         }
 
-        Ok((
-            rewrite_inner(item_trait, false)?,
-            rewrite_inner(item_trait_send, true)?,
-        ))
+        Ok(item_trait)
     }
 
     fn impl_service_trait(&self) -> (TokenStream, TokenStream) {
@@ -145,9 +129,11 @@ impl<'a> Generator<'a> {
             item_trait,
             vis,
             fns,
-            priv_mod,
-            req_enum,
-            res_enum,
+            ident_priv_mod,
+            ident_container,
+            ident_ext_trait,
+            ident_req_enum,
+            ident_res_enum,
             ..
         } = self;
         let branches: Vec<_> = fns
@@ -155,11 +141,11 @@ impl<'a> Generator<'a> {
             .map(|tfn| {
                 let fn_name = &tfn.tfn.sig.ident;
                 let variant = &tfn.variant;
-                let args = tfn_args(&tfn.tfn).map(|(i, _inp)| quote!(req.#i));
+                let args = tfn_args(&tfn.tfn).map(|(i, _, _inp)| quote!(req.#i));
 
                 quote! {
-                    #priv_mod::#req_enum::#variant(req) => {
-                        #priv_mod::#res_enum::#variant(self.0.#fn_name(
+                    #ident_priv_mod::#ident_req_enum::#variant(req) => {
+                        #ident_priv_mod::#ident_res_enum::#variant(self.0.#fn_name(
                             #( #args ),*
                         ).await)
                     }
@@ -167,27 +153,25 @@ impl<'a> Generator<'a> {
             })
             .collect();
 
-        let container_name = format_ident!("{}Container", &item_trait.ident);
-        let typ_ext = format_ident!("{}Ext", &item_trait.ident);
         let typ = &item_trait.ident;
         let name = &item_trait.ident.to_string();
 
         let part_impl = quote! {
-            const NAME: &'static str = #name;
-            type Request = #priv_mod::#req_enum;
-            type Response = #priv_mod::#res_enum;
+            const NAME: &'static str = SERVICE_NAME;
+            type Request = #ident_priv_mod::#ident_req_enum;
+            type Response = #ident_priv_mod::#ident_res_enum;
         };
 
         (
             quote! {
-                pub struct #container_name<T>(pub T);
+                const SERVICE_NAME: &'static str = #name;
+                pub struct #ident_container<T>(pub T);
 
-                #[cfg(target_arch = "wasm32")]
-                impl<T> ::netfn::Service for #container_name<T> where T: #typ {
+                impl<T> ::netfn::Service for #ident_container<T> where T: #typ + ::netfn::compat::NetfnSync {
                     #part_impl
 
-                    fn dispatch(&self, request: #priv_mod::#req_enum)
-                        -> impl ::core::future::Future<Output = #priv_mod::#res_enum> {
+                    fn call(&self, request: #ident_priv_mod::#ident_req_enum)
+                        -> impl ::core::future::Future<Output = #ident_priv_mod::#ident_res_enum> + ::netfn::compat::NetfnSend {
                         async {
                             match request {
                                 #( #branches ),*
@@ -196,34 +180,20 @@ impl<'a> Generator<'a> {
                     }
                 }
 
-                #[cfg(not(target_arch = "wasm32"))]
-                impl<T> ::netfn::Service for #container_name<T> where T: #typ + ::core::marker::Sync {
-                    #part_impl
-
-                    fn dispatch(&self, request: #priv_mod::#req_enum)
-                        -> impl ::core::future::Future<Output = #priv_mod::#res_enum> + ::core::marker::Send {
-                        async {
-                            match request {
-                                #( #branches ),*
-                            }
-                        }
-                    }
-                }
-
-                impl<T> From<T> for #container_name<T> {
+                impl<T> From<T> for #ident_container<T> {
                     fn from(value: T) -> Self {
-                        #container_name(value)
+                        #ident_container(value)
                     }
                 }
             },
             quote! {
-                #vis trait #typ_ext<T> {
-                    fn into_service(self) -> #priv_mod::#container_name<T>;
+                #vis trait #ident_ext_trait<T> {
+                    fn into_service(self) -> #ident_priv_mod::#ident_container<T>;
                 }
 
-                impl<T> #typ_ext<T> for T where T: #typ {
-                    fn into_service(self) -> #priv_mod::#container_name<T> {
-                        #priv_mod::#container_name(self)
+                impl<T> #ident_ext_trait<T> for T where T: #typ {
+                    fn into_service(self) -> #ident_priv_mod::#ident_container<T> {
+                        #ident_priv_mod::#ident_container(self)
                     }
                 }
             },
@@ -235,9 +205,13 @@ impl<'a> Generator<'a> {
 
         let inputs = fns.iter().filter_map(|tfn| {
             let name = &tfn.args;
-            let args = tfn_args(&tfn.tfn).map(|(i, inp)| {
+            let args = tfn_args(&tfn.tfn).map(|(field, i, inp)| {
+                let derives = field_derives(i);
                 let ty = &inp.ty;
-                Some(quote!(pub #i: #ty))
+                Some(quote! {
+                    #derives
+                    pub #field: #ty
+                })
             });
             let derive = struct_derives();
 
@@ -255,7 +229,11 @@ impl<'a> Generator<'a> {
     }
 
     fn request_enum(&self) -> TokenStream {
-        let Self { fns, req_enum, .. } = self;
+        let Self {
+            fns,
+            ident_req_enum,
+            ..
+        } = self;
 
         let variants = fns.iter().map(|tfn| {
             let ident = &tfn.variant;
@@ -266,17 +244,23 @@ impl<'a> Generator<'a> {
             }
         });
         let derive = struct_derives();
+        let req_derive = request_derives();
 
         quote! {
             #derive
-            pub enum #req_enum {
+            #req_derive
+            pub enum #ident_req_enum {
                 #( #variants ),*
             }
         }
     }
 
     fn response_enum(&self) -> TokenStream {
-        let Self { fns, res_enum, .. } = self;
+        let Self {
+            fns,
+            ident_res_enum,
+            ..
+        } = self;
 
         let variants = fns.iter().map(|tfn| {
             let ident = &tfn.variant;
@@ -287,10 +271,12 @@ impl<'a> Generator<'a> {
             }
         });
         let derive = struct_derives();
+        let res_derive = response_derives();
 
         quote! {
             #derive
-            pub enum #res_enum {
+            #res_derive
+            pub enum #ident_res_enum {
                 #( #variants ),*
             }
         }
@@ -299,16 +285,16 @@ impl<'a> Generator<'a> {
     fn impl_service_client(&self) -> TokenStream {
         let Self {
             fns,
-            client,
-            req_enum,
-            res_enum,
+            ident_client,
+            ident_req_enum,
             ..
         } = self;
-        let fns = fns.iter().map(|tfn| {
+
+        let fn_defs = fns.iter().map(|tfn| {
             let name = &tfn.tfn.sig.ident;
 
             let args: Vec<_> = tfn_args(&tfn.tfn)
-                .map(|(_, inp)| {
+                .map(|(_, _, inp)| {
                     let name = &inp.pat;
                     let typ = &inp.ty;
                     quote!(#name: #typ)
@@ -317,7 +303,7 @@ impl<'a> Generator<'a> {
 
             let variant = &tfn.variant;
             let args_struct = &tfn.args;
-            let variant_args = tfn_args(&tfn.tfn).map(|(i, inp)| {
+            let variant_args = tfn_args(&tfn.tfn).map(|(i, _, inp)| {
                 let name = &inp.pat;
                 quote!(#i: #name)
             });
@@ -326,59 +312,43 @@ impl<'a> Generator<'a> {
             let docs: Vec<_> = tfn_docs(&tfn.tfn).collect();
 
             let body = quote! {
-                let result = self.transport.dispatch(
-                    #req_enum::#variant(#args_struct {
+                self.transport.call(
+                    SERVICE_NAME,
+                    #ident_req_enum::#variant(#args_struct {
                         #(#variant_args),*
                     }),
-                );
-                async move {
-                    match result.await? {
-                        #res_enum::#variant(result) => Ok(result),
-                        _ => ::core::unreachable!(),
-                    }
-                }
+                )
             };
 
             quote! {
-                #[cfg(target_arch = "wasm32")]
                 #(#docs)*
                 pub fn #name<'a>(
                     &'a self,
                     #(#args),*
                 ) -> impl
                     ::core::future::Future<Output = ::core::result::Result<#output, T::Error>>
-                  + 'a
-                {
-                    #body
-                }
-
-                #[cfg(not(target_arch = "wasm32"))]
-                #(#docs)*
-                pub fn #name<'a>(
-                    &'a self,
-                    #(#args),*
-                ) -> impl
-                    ::core::future::Future<Output = ::core::result::Result<#output, T::Error>>
-                  + ::core::marker::Send
-                  + 'a
+                    + ::netfn::compat::NetfnSend
+                    + 'a
                 {
                     #body
                 }
             }
         });
 
-        let bound = quote!(where T: ::netfn::Transport<#req_enum, #res_enum>);
+        let bound = quote!(where T: ::netfn::Transport);
         quote! {
-            pub struct #client<T> #bound {
+            pub struct #ident_client<T> #bound {
                 transport: T
             }
 
-            impl<T> #client<T> #bound {
+            impl<T> #ident_client<T> #bound {
                 pub fn new(transport: T) -> Self {
                     Self { transport }
                 }
+            }
 
-                #(#fns)*
+            impl<T> #ident_client<T> #bound {
+                #(#fn_defs)*
             }
         }
     }
@@ -408,7 +378,7 @@ fn tfn_ret(tfn: &TraitItemFn) -> TokenStream {
     }
 }
 
-fn tfn_args(tfn: &TraitItemFn) -> impl Iterator<Item = (Ident, &PatType)> {
+fn tfn_args(tfn: &TraitItemFn) -> impl Iterator<Item = (Ident, usize, &PatType)> {
     tfn.sig
         .inputs
         .iter()
@@ -417,7 +387,7 @@ fn tfn_args(tfn: &TraitItemFn) -> impl Iterator<Item = (Ident, &PatType)> {
             FnArg::Typed(inp) => Some(inp),
         })
         .enumerate()
-        .map(|(i, inp)| (format_ident!("a{}", i), inp))
+        .map(|(i, inp)| (format_ident!("a{}", i), i, inp))
 }
 
 fn tfn_docs(tfn: &TraitItemFn) -> impl Iterator<Item = &Attribute> {
@@ -430,7 +400,6 @@ fn tfn_docs(tfn: &TraitItemFn) -> impl Iterator<Item = &Attribute> {
     })
 }
 
-#[cfg(feature = "serde")]
 fn struct_derives() -> TokenStream {
     quote! {
         #[derive(::netfn::serde::Serialize, ::netfn::serde::Deserialize, Clone, Debug)]
@@ -438,7 +407,21 @@ fn struct_derives() -> TokenStream {
     }
 }
 
-#[cfg(not(feature = "serde"))]
-fn struct_derives() -> TokenStream {
-    quote!(#[derive(Clone, Debug)])
+fn request_derives() -> TokenStream {
+    quote! {
+        #[serde(tag = "fn", content = "args")]
+    }
+}
+
+fn response_derives() -> TokenStream {
+    quote! {
+        #[serde(untagged)]
+    }
+}
+
+fn field_derives(i: usize) -> TokenStream {
+    let i = i.to_string();
+    quote! {
+        #[serde(rename = #i)]
+    }
 }

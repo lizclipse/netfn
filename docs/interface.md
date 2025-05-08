@@ -248,7 +248,7 @@ the other must send an error on the same handle to inform the other side that th
 exist and to clean up any handlers.
 
 ```ts
-interface TunnelMessage {
+interface TunnelStreamMessage {
   type: "stream_message";
   handle: u64;
   data: any;
@@ -390,8 +390,31 @@ All implementors have to support JSON, other encodings can be supported as neede
 MessagePack is a good option to support, as it will then match the supported encodings of WebSocket
 tunnels.
 
+#### Errors
+
+A status code of 537 indicates that the request handler failed, and that a `GenericError` response
+has been sent.
+All other status codes are treated as normal HTTP errors, and can be used by the server as needed.
+
+While this is in the server error range, this code is sent for any error that the handler throws,
+even if said error was caused by the client.
+There is no generic way for the framework to tell between client and server errors that come from
+the server handlers, so clients will have to figure this out for themselves.
+
 ### WebSocket
 
 WebSockets allow for both text and binary messages, which can both be used.
 Text messages are expected to be JSON, and binary ones MessagePack.
 Implementors may use the headers and query params how they see fit.
+
+## Notes
+
+The error definitions in this interface are separate from the return values of the handlers.
+That is - in languages like Rust, a handler may return a `Result::Err` variant and the transport
+will treat it as a regular response.
+This has the benefit of allowing call definitions to behave exactly like a function with any
+generic return type, but it does mean that handlers which do return `Result`s will require clients
+to unwrap the results twice (once for the transport, again for the call itself).
+This is by design, as it keeps the transport errors and handler errors completely separate.
+For languages that throw exceptions, however, these exceptions _will_ be reported as errors in
+order for client interfaces to match server ones.

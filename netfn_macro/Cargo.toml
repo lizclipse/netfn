@@ -11,6 +11,3 @@ syn = { workspace = true }
 
 [lib]
 proc-macro = true
-
-[features]
-serde = ["netfn_codegen/serde"]
