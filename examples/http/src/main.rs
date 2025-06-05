@@ -75,21 +75,26 @@ async fn serve() {
     use serde_json::json;
 
     // build our application with a single route
-    let app = Router::new()
-        .route(
-            "/",
-            post(|Json(req): Json<test_api::TestApiRequest>| async {
-                let service = TestService.into_service();
-                println!("{:#?}", req);
-                Json(service.call(req).await)
-            }),
-        )
-        .fallback(any(|| async {
-            (
-                StatusCode::NOT_FOUND,
-                Json(json!({ "message": "Not Found" })),
+    let app =
+        Router::new()
+            .route(
+                "/",
+                post(
+                    |Json(req): Json<
+                        netfn::CallResponseRequest<'static, test_api::TestApiRequest>,
+                    >| async {
+                        let service = TestService.into_service();
+                        println!("{:#?}", req);
+                        Json(service.call(req.call).await)
+                    },
+                ),
             )
-        }));
+            .fallback(any(|| async {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({ "message": "Not Found" })),
+                )
+            }));
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3210").await.unwrap();
