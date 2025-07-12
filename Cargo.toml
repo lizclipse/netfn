@@ -12,9 +12,9 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-axum = "0.8.1"
+axum = "0.8.4"
 case = "1.0.0"
-darling = "0.20.10"
+darling = "0.20.11"
 futures = { version = "0.3.31", default-features = false, features = ["async-await", "std"] }
 netfn = { version = "0.1.0", path = "." }
 netfn_codegen = { version = "0.1.0", path = "netfn_codegen" }
@@ -23,15 +23,17 @@ netfn_macro = { version = "0.1.0", path = "netfn_macro" }
 netfn_transport_channel = { version = "0.1.0", path = "netfn_transport_channel" }
 netfn_transport_http = { version = "0.1.0", path = "netfn_transport_http" }
 netfn_transport_stream = { version = "0.1.0", path = "netfn_transport_stream" }
-proc-macro2 = "1.0.94"
-quote = "1.0.39"
-reqwest = { version = "0.12.12" }
+netfn_transport_ws = { version = "0.1.0", path = "netfn_transport_ws" }
+proc-macro2 = "1.0.95"
+quote = "1.0.40"
+reqwest = "0.12.20"
+rmp-serde = "1.3.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-syn = { version = "2.0.99", default-features = false }
+syn = { version = "2.0.102", default-features = false }
 thiserror = "2.0.12"
-tokio = { version = "1.44.0" }
-tungstenite = "0.26.2"
+tokio = "1.45.1"
+tokio-tungstenite = "0.27.0"
 url = "2.5.4"
 wasm-bindgen-futures = "0.4.50"
 
