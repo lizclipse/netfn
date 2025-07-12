@@ -6,5 +6,8 @@ edition = { workspace = true }
 [dependencies]
 futures = { workspace = true }
 netfn_core = { workspace = true }
+netfn_transport_stream = { workspace = true }
+rmp-serde = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }

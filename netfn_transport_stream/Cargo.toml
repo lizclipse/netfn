@@ -1,0 +1,10 @@
+[package]
+name = "netfn_transport_stream"
+version = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+futures = { workspace = true }
+netfn_core = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
