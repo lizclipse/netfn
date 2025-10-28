@@ -9,7 +9,7 @@ axum = { workspace = true, features = ["ws"] }
 futures = { workspace = true }
 netfn = { workspace = true }
 netfn_transport_stream = { workspace = true }
-netfn_transport_ws = { workspace = true }
+netfn_transport_ws = { workspace = true, features = ["tokio-tungstenite"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

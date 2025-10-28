@@ -102,8 +102,9 @@ Example, using JSON:
 ## Tunnel
 
 A bi-directional transport allows for both simple function calls as well as streams that
-work in either direction or both. However, tunnels tend to require more work to set up and use,
-whereas a more simple transport such as HTTP allows for scratch testing when learning the API.
+work in either direction or both.
+However, tunnels tend to require more work to set up and use, whereas a more simple transport
+such as HTTP allows for scratch testing when learning the API.
 Most clients should default to a tunnel transport if available, but servers should provide
 a HTTP transport for scratch-testing.
 
@@ -392,8 +393,8 @@ tunnels.
 
 #### Errors
 
-A status code of 537 indicates that the request handler failed, and that a `GenericError` response
-has been sent.
+A status code of 537 (custom) indicates that the request handler failed, and that a `GenericError`
+response has been sent.
 All other status codes are treated as normal HTTP errors, and can be used by the server as needed.
 
 While this is in the server error range, this code is sent for any error that the handler throws,
@@ -411,10 +412,13 @@ Implementors may use the headers and query params how they see fit.
 
 The error definitions in this interface are separate from the return values of the handlers.
 That is - in languages like Rust, a handler may return a `Result::Err` variant and the transport
-will treat it as a regular response.
+will treat it as a regular (successful) response.
 This has the benefit of allowing call definitions to behave exactly like a function with any
 generic return type, but it does mean that handlers which do return `Result`s will require clients
 to unwrap the results twice (once for the transport, again for the call itself).
 This is by design, as it keeps the transport errors and handler errors completely separate.
 For languages that throw exceptions, however, these exceptions _will_ be reported as errors in
-order for client interfaces to match server ones.
+order for client interfaces to match server ones - e.g. in JavaScript, the server handler could throw,
+and this would become a generic 537-code error, which will then cause the client call to throw.
+While not prescribed by this interface, client libraries for languages like this should use a dedicated
+error type to distingush transport and call errors.

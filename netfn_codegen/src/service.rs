@@ -110,7 +110,7 @@ impl<'a> Generator<'a> {
             };
 
             if let None = tfn.sig.asyncness {
-                return Err(Error::new(tfn.span(), "Only async fns are supported"));
+                return Err(Error::new_spanned(&tfn.sig, "Only async fns are supported"));
             }
             tfn.sig.asyncness = None;
 

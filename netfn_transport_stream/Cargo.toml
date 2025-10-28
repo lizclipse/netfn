@@ -7,4 +7,5 @@ edition = { workspace = true }
 futures = { workspace = true }
 netfn_core = { workspace = true }
 serde = { workspace = true }
+scopeguard = { workspace = true }
 thiserror = { workspace = true }

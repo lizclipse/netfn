@@ -4,6 +4,7 @@ use futures::{
     Sink, SinkExt as _, Stream, StreamExt as _,
     channel::{mpsc, oneshot},
     select,
+    task::{LocalSpawn, LocalSpawnExt as _, Spawn, SpawnError, SpawnExt as _},
 };
 use netfn_core::{CallResponseRequest, Transport, TunnelRequest, TunnelResponse};
 use serde::{Serialize, de::DeserializeOwned};
@@ -51,7 +52,6 @@ where
     ) -> (Self, StreamListener<Codec, Codec::Format, SinkError>) {
         let (ref_sx, ref_rx) = mpsc::channel(buffer_size);
         let (msg_sx, msg_rx) = mpsc::channel(buffer_size);
-        let (close_sx, close_rx) = mpsc::channel(1);
         (
             Self {
                 codec: codec.clone(),
@@ -63,8 +63,6 @@ where
                 codec,
                 ref_rx,
                 msg_rx,
-                close_sx,
-                close_rx,
             },
         )
     }
@@ -75,34 +73,87 @@ pub struct StreamListener<Codec, Format, SinkError> {
     codec: Codec,
     ref_rx: mpsc::Receiver<oneshot::Sender<u64>>,
     msg_rx: mpsc::Receiver<BusMsg<Format, SinkError>>,
-    close_sx: mpsc::Sender<()>,
-    close_rx: mpsc::Receiver<()>,
 }
 
 impl<Codec, SinkError> StreamListener<Codec, Codec::Format, SinkError>
 where
     Codec: StreamCodec,
 {
-    pub fn closer(&self) -> StreamListenerCloser {
-        StreamListenerCloser {
-            close_sx: self.close_sx.clone(),
-        }
+    /// Sets up the main loop that sends and receives messages on the givin sink and stream.
+    ///
+    /// All client APIs that use the transport that this came from will communicate with this,
+    /// meaning that nothing will happen until the loop has been started.
+    pub fn start<Sx, Rx, StreamError, Executor>(
+        mut self,
+        sink: Sx,
+        stream: Rx,
+        executor: Executor,
+    ) -> Result<StreamListenerHandle<Codec, Codec::Format, SinkError>, SpawnError>
+    where
+        Sx: Sink<Codec::Format, Error = SinkError> + Unpin + Send + 'static,
+        Rx: Stream<Item = Result<Codec::Format, StreamError>> + Unpin + Send + 'static,
+        Executor: Spawn,
+        Codec: 'static,
+        SinkError: Send + 'static,
+        StreamError: Send,
+        <Codec as StreamCodec>::Format: Send,
+    {
+        let (handle, close_rx, listener_sx) = StreamListenerHandle::new();
+        executor.spawn(async move {
+            self.main_loop(sink, stream, close_rx).await;
+            let _ = listener_sx.send(self);
+        })?;
+
+        Ok(handle)
     }
 
-    pub async fn listen<Sx, Rx>(&mut self, sink: &mut Sx, stream: &mut Rx)
+    /// Sets up the main loop that sends and receives messages on the givin sink and stream.
+    ///
+    /// All client APIs that use the transport that this came from will communicate with this,
+    /// meaning that nothing will happen until the loop has been started.
+    pub fn start_local<Sx, Rx, StreamError, Executor>(
+        mut self,
+        sink: Sx,
+        stream: Rx,
+        executor: Executor,
+    ) -> Result<StreamListenerHandle<Codec, Codec::Format, SinkError>, SpawnError>
     where
+        Sx: Sink<Codec::Format, Error = SinkError> + Unpin + 'static,
+        Rx: Stream<Item = Result<Codec::Format, StreamError>> + Unpin + 'static,
+        Executor: LocalSpawn,
+        Codec: 'static,
+        SinkError: 'static,
+    {
+        let (handle, close_rx, listener_sx) = StreamListenerHandle::new();
+        executor.spawn_local(async move {
+            self.main_loop(sink, stream, close_rx).await;
+            let _ = listener_sx.send(self);
+        })?;
+
+        Ok(handle)
+    }
+
+    /// This is not cancel-safe as the sink has to be closed once the loop ends.
+    /// To get around this, the future should be spawned in an executor and the closer used to
+    /// cancel the loop.
+    async fn main_loop<Sx, Rx, StreamError>(
+        &mut self,
+        mut sink: Sx,
+        stream: Rx,
+        mut close_rx: oneshot::Receiver<()>,
+    ) where
         Sx: Sink<Codec::Format, Error = SinkError> + Unpin,
-        Rx: Stream<Item = Codec::Format> + Unpin,
+        Rx: Stream<Item = Result<Codec::Format, StreamError>> + Unpin,
     {
         let mut stream = stream.fuse();
 
         let mut reqs = HashMap::new();
         let mut cref = 0;
 
-        enum Bus<Format, SinkErr> {
-            RefRequest(oneshot::Sender<u64>),
-            Message(BusMsg<Format, SinkErr>),
-            Stream(Format),
+        enum Bus<Format, SinkErr, StreamError> {
+            RequestRef(oneshot::Sender<u64>),
+            SendMessage(BusMsg<Format, SinkErr>),
+            RecvMessage(Result<Format, StreamError>),
         }
 
         // We loop against all these together to maintain some form of sanity.
@@ -112,17 +163,17 @@ where
         // If the tunnel closes and reopens, in-flight requests get retried and the
         // IDs they need will only be given once the counter has been reset.
         while let Some(s) = select! {
-            ref_req = self.ref_rx.next() => ref_req.map(Bus::RefRequest),
-            bus = self.msg_rx.next() => bus.map(Bus::Message),
-            stream = stream.next() => stream.map(Bus::Stream),
-            _ = self.close_rx.next() => None,
+            ref_req = self.ref_rx.next() => ref_req.map(Bus::RequestRef),
+            bus = self.msg_rx.next() => bus.map(Bus::SendMessage),
+            stream = stream.next() => stream.map(Bus::RecvMessage),
+            _ = close_rx => None,
         } {
             match s {
-                Bus::RefRequest(ref_req_sx) => {
+                Bus::RequestRef(ref_req_sx) => {
                     let _ = ref_req_sx.send(cref);
                     cref += 1;
                 }
-                Bus::Message((msg_ref, req, response_sx)) => {
+                Bus::SendMessage((msg_ref, req, response_sx)) => {
                     match sink.send(req).await {
                         Ok(()) => {
                             reqs.insert(msg_ref, response_sx);
@@ -134,7 +185,7 @@ where
                         }
                     }
                 }
-                Bus::Stream(res) => {
+                Bus::RecvMessage(Ok(res)) => {
                     let Ok(msg_ref) = self.codec.get_ref(&res) else {
                         // TODO: log err somewhere
                         continue;
@@ -155,10 +206,15 @@ where
                     // TODO: add some warn log here
                     let _ = response_sx.send(Ok(res));
                 }
+                Bus::RecvMessage(Err(_)) => {
+                    // println!("err recv");
+                    // TODO: decide whether to actually do something useful here
+                    break;
+                }
             }
         }
 
-        // We respond to any in-flight requests that the bus has closed to make them
+        // Once closed we respond to any in-flight requests that the bus has closed to make them
         // try again.
         // Once they do, the first thing they will ask for is new IDs, which will only
         // be given once the bus reopens.
@@ -166,19 +222,40 @@ where
             let _ = response_sx.send(Err(BusError::Closed));
         }
 
-        // TODO: we should bubble this back up
+        // Nothing we can really do if the sink fails to close.
         let _ = sink.close().await;
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct StreamListenerCloser {
-    close_sx: mpsc::Sender<()>,
+#[derive(Debug)]
+#[must_use = "dropping the handle will close the listener"]
+#[clippy::has_significant_drop]
+pub struct StreamListenerHandle<Codec, Format, SinkError> {
+    close_sx: oneshot::Sender<()>,
+    listener_rx: oneshot::Receiver<StreamListener<Codec, Format, SinkError>>,
 }
 
-impl StreamListenerCloser {
-    pub fn close(&mut self) {
-        let _ = self.close_sx.try_send(());
+impl<Codec, Format, SinkError> StreamListenerHandle<Codec, Format, SinkError> {
+    fn new() -> (
+        Self,
+        oneshot::Receiver<()>,
+        oneshot::Sender<StreamListener<Codec, Format, SinkError>>,
+    ) {
+        let (close_sx, close_rx) = oneshot::channel();
+        let (listener_sx, listener_rx) = oneshot::channel();
+        (
+            Self {
+                close_sx,
+                listener_rx,
+            },
+            close_rx,
+            listener_sx,
+        )
+    }
+
+    pub fn close(self) -> impl Future<Output = StreamListener<Codec, Format, SinkError>> {
+        let _ = self.close_sx.send(());
+        async move { self.listener_rx.await.unwrap() }
     }
 }
 

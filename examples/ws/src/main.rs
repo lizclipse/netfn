@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use futures::{SinkExt as _, StreamExt as _, pin_mut};
+use futures::StreamExt as _;
 use netfn_transport_stream::StreamTransport;
-use netfn_transport_ws::{WebSocketCodec, WebSocketMessage};
+use netfn_transport_ws::tokio_tungstenite::{TokioSpawner, TokioTungsteniteWebSocketCodec};
 use tokio_tungstenite::connect_async;
 
 fn main() {
@@ -20,40 +20,15 @@ pub async fn example() {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 
-    // let transport: HttpTransport = "http://localhost:3210/".try_into().unwrap();
-    let codec = WebSocketCodec::new();
+    let codec = TokioTungsteniteWebSocketCodec::new();
     codec.set_use_json(true);
-    let (transport, mut listener) = StreamTransport::new(codec, 16);
-    let mut closer = listener.closer();
+    let (transport, listener) = StreamTransport::new(codec, 16);
 
     let (ws, _) = connect_async("ws://localhost:3210").await.unwrap();
-    tokio::spawn(async move {
-        use tokio_tungstenite::tungstenite::Message as WsMessage;
-
-        let (sink, stream) = ws.split();
-
-        let sink = sink.with(|msg: WebSocketMessage| async {
-            let msg = match msg {
-                WebSocketMessage::Json(msg) => WsMessage::Text(msg.into()),
-                WebSocketMessage::MessagePack(msg) => WsMessage::Binary(msg.into()),
-            };
-
-            Ok::<WsMessage, tokio_tungstenite::tungstenite::Error>(msg)
-        });
-        pin_mut!(sink);
-
-        let stream = stream.map(|msg| {
-            msg.map(|msg| match msg {
-                WsMessage::Text(msg) => WebSocketMessage::Json(msg.as_str().into()),
-                WsMessage::Binary(msg) => WebSocketMessage::MessagePack(msg.into()),
-                _ => todo!(),
-            })
-            .unwrap()
-        });
-        pin_mut!(stream);
-
-        listener.listen(&mut sink, &mut stream).await;
-    });
+    let (sink, stream) = ws.split();
+    let listener_ref = listener
+        .start(sink, stream, TokioSpawner::current())
+        .unwrap();
 
     let client = TestApiClient::new(transport);
 
@@ -86,7 +61,7 @@ pub async fn example() {
     println!("{:#?}", client.qoz(HashMap::default(), 10).await);
     println!("<<<<\n");
 
-    closer.close();
+    listener_ref.close().await;
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -98,7 +73,6 @@ async fn serve() {
         any(async |ws: WebSocketUpgrade| ws.on_upgrade(handle_socket)),
     );
 
-    // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3210").await.unwrap();
     println!("beginning listen on 3210");
     axum::serve(listener, app).await.unwrap();

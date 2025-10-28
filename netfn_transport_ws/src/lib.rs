@@ -1,74 +1,84 @@
+#[cfg(feature = "tokio-tungstenite")]
+pub mod tokio_tungstenite;
+
 use std::sync::{Arc, atomic::AtomicBool};
 
-use netfn_transport_stream::StreamCodec;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::Deserialize;
 use thiserror::Error;
 
-pub enum WebSocketMessage {
-    Json(String),
-    MessagePack(Vec<u8>),
-}
+// pub trait WebSocket
 
-#[derive(Debug, Clone)]
-pub struct WebSocketCodec {
-    use_json: WebSocketCodecToggler,
-}
+// pub enum WebSocketMessage {
+//     Json(String),
+//     MessagePack(Vec<u8>),
+//     Close,
+// }
 
-impl WebSocketCodec {
-    pub fn new() -> Self {
-        Self {
-            use_json: WebSocketCodecToggler(Arc::new(AtomicBool::new(false))),
-        }
-    }
+// #[derive(Debug, Clone)]
+// pub struct WebSocketCodec {
+//     use_json: WebSocketCodecToggler,
+// }
 
-    pub fn use_json(&self) -> bool {
-        self.use_json.value()
-    }
+// impl WebSocketCodec {
+//     pub fn new() -> Self {
+//         Self {
+//             use_json: WebSocketCodecToggler(Arc::new(AtomicBool::new(false))),
+//         }
+//     }
 
-    pub fn set_use_json(&self, value: bool) {
-        self.use_json.set(value);
-    }
+//     pub fn use_json(&self) -> bool {
+//         self.use_json.value()
+//     }
 
-    pub fn use_json_toggle(&self) -> WebSocketCodecToggler {
-        self.use_json.clone()
-    }
-}
+//     pub fn set_use_json(&self, value: bool) {
+//         self.use_json.set(value);
+//     }
 
-impl StreamCodec for WebSocketCodec {
-    type Format = WebSocketMessage;
-    type EncodeError = WebSocketEncodeError;
-    type DecodeError = WebSocketDecodeError;
+//     pub fn use_json_toggle(&self) -> WebSocketCodecToggler {
+//         self.use_json.clone()
+//     }
+// }
 
-    fn encode<T>(&self, value: &T) -> Result<Self::Format, Self::EncodeError>
-    where
-        T: Serialize,
-    {
-        Ok(match self.use_json() {
-            false => WebSocketMessage::MessagePack(rmp_serde::to_vec(value)?),
-            true => WebSocketMessage::Json(serde_json::to_string(value)?),
-        })
-    }
+// impl StreamCodec for WebSocketCodec {
+//     type Format = WebSocketMessage;
+//     type EncodeError = WebSocketEncodeError;
+//     type DecodeError = WebSocketDecodeError;
 
-    fn decode<T>(&self, message: &Self::Format) -> Result<T, Self::DecodeError>
-    where
-        T: DeserializeOwned,
-    {
-        Ok(match message {
-            WebSocketMessage::MessagePack(msg) => rmp_serde::from_slice(msg)?,
-            WebSocketMessage::Json(msg) => serde_json::from_str(msg)?,
-        })
-    }
+//     fn encode<T>(&self, value: &T) -> Result<Self::Format, Self::EncodeError>
+//     where
+//         T: Serialize,
+//     {
+//         Ok(match self.use_json() {
+//             false => WebSocketMessage::MessagePack(rmp_serde::to_vec(value)?),
+//             true => WebSocketMessage::Json(serde_json::to_string(value)?),
+//         })
+//     }
 
-    fn get_ref(&self, message: &Self::Format) -> Result<Option<u64>, Self::DecodeError> {
-        let partial: PartialRefs = self.decode(message)?;
-        return Ok(partial.msg_ref);
-    }
-}
+//     fn decode<T>(&self, message: &Self::Format) -> Result<T, Self::DecodeError>
+//     where
+//         T: DeserializeOwned,
+//     {
+//         match message {
+//             WebSocketMessage::MessagePack(msg) => Ok(rmp_serde::from_slice(msg)?),
+//             WebSocketMessage::Json(msg) => Ok(serde_json::from_str(msg)?),
+//             WebSocketMessage::Close => Err(WebSocketDecodeError::MessageClose),
+//         }
+//     }
+
+//     fn get_ref(&self, message: &Self::Format) -> Result<Option<u64>, Self::DecodeError> {
+//         let partial: PartialRefs = self.decode(message)?;
+//         return Ok(partial.msg_ref);
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct WebSocketCodecToggler(Arc<AtomicBool>);
 
 impl WebSocketCodecToggler {
+    pub(crate) fn new() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+
     pub fn value(&self) -> bool {
         self.0.load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -92,6 +102,8 @@ pub enum WebSocketDecodeError {
     Json(#[from] serde_json::Error),
     #[error("messagepack decode error: {0}")]
     MessagePack(#[from] rmp_serde::decode::Error),
+    #[error("attempted to decode message that did not contain data")]
+    NotData,
 }
 
 #[derive(Deserialize)]
